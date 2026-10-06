@@ -21,9 +21,10 @@ class NodeTest(unittest.TestCase):
         self.comfy.install(self)
         clean_env(self, LATENTPOST_URL=self.fake.url)
         save_settings(self.user_dir, {client.SETTING_ID: API_KEY})
-        patcher = mock.patch.object(nodes, "_wait", lambda seconds: None)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for name, value in (("_wait", lambda seconds: None), ("_done", {})):  # a fresh ComfyUI process
+            patcher = mock.patch.object(nodes, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def file(self, name, data=b"video bytes", folder=None):
         path = os.path.join(folder or self.output_dir, name)
@@ -56,6 +57,29 @@ class SaveToVaultTest(NodeTest):
         self.save("  ", "LP", file_paths=self.file("a.webm"))
         self.assertEqual(self.fake.vault, [])
         self.assertEqual(self.comfy.texts[-1], "Uploaded 1 to your Fanvue media")
+
+    def test_the_same_inputs_again_return_the_earlier_upload(self):
+        path = self.file("a.mp4")
+        self.assertEqual(self.save("Drafts", "LP", file_paths=path), ("media-1",))
+        self.assertEqual(self.save("Drafts", "LP", file_paths=path), ("media-1",))
+        self.assertEqual(len(self.fake.uploads), 1)
+        self.assertEqual(self.fake.vault, [("Drafts", ["media-1"])])
+        self.assertEqual(self.comfy.texts[-1], "Already done in an earlier run: Uploaded 1 to vault folder 'Drafts'. "
+                                               "Change an input to upload again.")
+
+    def test_a_changed_input_or_file_uploads_again(self):
+        path = self.file("a.mp4")
+        self.save("Drafts", "LP", file_paths=path)
+        self.save("Other", "LP", file_paths=path)
+        self.file("a.mp4", b"longer video bytes")  # re-rendered under the same name
+        self.save("Other", "LP", file_paths=path)
+        self.assertEqual(len(self.fake.uploads), 3)
+
+    def test_a_failed_run_is_not_remembered(self):
+        self.fake.fail("POST", "/uploads$", 402, "quota_exceeded", "You've used all 30 free uploads this month.")
+        path = self.file("a.mp4")
+        self.error(self.save, "Drafts", "LP", file_paths=path)
+        self.assertEqual(self.save("Drafts", "LP", file_paths=path), ("media-1",))
 
     def test_checks_inputs_before_calling_the_broker(self):
         self.assertEqual(self.error(self.save, "Drafts", "LP"), "Nothing to upload. Connect images, or enter file paths.")
@@ -103,6 +127,13 @@ class SaveToVaultTest(NodeTest):
         self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
         self.assertNotIn(b"tEXt", png)
         self.assertNotIn(b"workflow", png)
+
+        # ComfyUI 0.35 re-runs every node on each queue, so the same images arrive again as new tensors.
+        same = [Tensor(np.full((8, 8, 3), 0.5, dtype=np.float32)), Tensor(np.zeros((8, 8, 3), dtype=np.float32))]
+        self.assertEqual(self.save("Drafts", "my/set", images=same), ("media-1\nmedia-2",))
+        self.assertEqual(len(self.fake.uploads), 2)
+        same[1].array[0, 0, 0] = 0.25  # one pixel differs, as from another seed
+        self.assertEqual(self.save("Drafts", "my/set", images=same), ("media-3\nmedia-4",))
 
 
 class SchedulePostTest(NodeTest):
@@ -164,6 +195,17 @@ class SchedulePostTest(NodeTest):
         self.fake.plan = "free"
         self.assertEqual(self.error(self.make),
                          f"Scheduled and paid posts need Pro. Upgrade on the dashboard: {self.fake.url}/dashboard")
+        self.fake.plan = "pro"  # upgraded; a failed run isn't remembered
+        self.assertEqual(self.make(), ("post-1",))
+
+    def test_the_same_inputs_again_never_post_twice(self):
+        self.assertEqual(self.make(minutes=0), ("post-1",))
+        self.assertEqual(self.make(minutes=0), ("post-1",))
+        self.assertEqual(len(self.fake.posts), 1)
+        self.assertEqual(self.comfy.texts[-1], "Already done in an earlier run: Published. "
+                                               "Change an input to post again.")
+        self.assertEqual(self.make(text="New set is up!", minutes=0), ("post-2",))
+        self.assertEqual(self.make(media="media-2", minutes=0), ("post-3",))
 
 
 class NodeDefinitionTest(unittest.TestCase):

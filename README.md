@@ -46,7 +46,7 @@ Creates a post now or at a set time. Fanvue does the scheduling, so ComfyUI does
 | `publish_at` | A set time like `2026-10-07 18:00`, in your computer's time zone. Add `Z` for UTC. Overrides `publish_in_minutes`. |
 | `price_cents` | 0 for a free post. Paid posts start at 300 ($3.00) and need media. |
 
-ComfyUI only re-runs a node when its inputs change. Queueing the same workflow twice won't upload or post twice. To post again, change something, like the caption or the seed.
+The nodes never upload or post the same thing twice while ComfyUI is running. Run them again with the same inputs, for example by queueing the same workflow twice, and they return the earlier result. To post again, change something, like the caption or the seed. They forget when ComfyUI restarts, so after a restart the same workflow posts again.
 
 ## When something goes wrong
 

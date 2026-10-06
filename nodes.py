@@ -1,7 +1,9 @@
 """The ComfyUI nodes. ComfyUI's own modules, numpy and Pillow are imported inside functions,
 so the tests can import this file without ComfyUI."""
 
+import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -17,6 +19,40 @@ MAX_TEXT = 5000
 MAX_POST_MEDIA = 100
 
 log = logging.getLogger("latentpost")
+
+# What the nodes already did in this ComfyUI process: a digest of a node's inputs -> (result, status
+# text). Running again with the same inputs returns the earlier result, so nothing is uploaded or posted
+# twice. ComfyUI's own cache can't promise that: it drops a prompt's results once another prompt runs a
+# node, and from 0.35 also when RAM runs low.
+_done = {}
+
+
+def _digest(*inputs):
+    return hashlib.sha256(json.dumps(inputs).encode()).hexdigest()
+
+
+def _image_digest(image):
+    pixels = image.cpu().numpy()
+    digest = hashlib.sha256(f"{pixels.dtype} {pixels.shape}".encode())
+    digest.update(pixels.tobytes())
+    return digest.hexdigest()
+
+
+def _file_digest(path):
+    """A file counts as changed when its size or modified time does."""
+    stat = os.stat(path)
+    return [os.path.normcase(path), stat.st_size, stat.st_mtime_ns]
+
+
+def _again(key, unique_id, verb):
+    """The earlier result for the same inputs, saying so on the node."""
+    result, done = _done[key]
+    status = _Status(unique_id, 1)
+    status.progress(1)
+    message = f"Already done in an earlier run: {done}. Change an input to {verb} again."
+    status.say(message)
+    log.info("LatentPost: %s", message)
+    return result
 
 
 def _wait(seconds):
@@ -124,14 +160,20 @@ class SaveToVault:
     def save(self, folder, filename_prefix, images=None, file_paths="", unique_id=None):
         folder = folder.strip()
         prefix = re.sub(r"[\\/]", "_", filename_prefix.strip()) or "LatentPost"
+        images = list(images) if images is not None else []
+        paths = _paths(file_paths)
+        if not images and not paths:
+            raise LatentPostError("Nothing to upload. Connect images, or enter file paths.")
+        key = _digest("save", folder, prefix, [_image_digest(image) for image in images],
+                      [_file_digest(path) for path, _ in paths])
+        if key in _done:
+            return _again(key, unique_id, "upload")
+
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         # (filename, media type, open) for each item. Images are encoded one at a time, as they're sent.
         items = [(f"{prefix}_{stamp}_{n:02}.png", "image", lambda i=image: _png(i))
-                 for n, image in enumerate(images if images is not None else [], 1)]
-        items += [(os.path.basename(path), media_type, lambda p=path: open(p, "rb"))
-                  for path, media_type in _paths(file_paths)]
-        if not items:
-            raise LatentPostError("Nothing to upload. Connect images, or enter file paths.")
+                 for n, image in enumerate(images, 1)]
+        items += [(os.path.basename(path), media_type, lambda p=path: open(p, "rb")) for path, media_type in paths]
 
         broker = _broker()
         status = _Status(unique_id, len(items))
@@ -160,7 +202,8 @@ class SaveToVault:
         done = f"Uploaded {len(uploaded)} to " + (f"vault folder '{folder}'" if folder else "your Fanvue media")
         status.say(done)
         log.info("LatentPost: %s", done)
-        return ("\n".join(uploaded),)
+        _done[key] = (("\n".join(uploaded),), done)
+        return _done[key][0]
 
 
 def _media_uuids(text):
@@ -241,6 +284,10 @@ class SchedulePost:
         if not text.strip() and not media:
             raise LatentPostError("The post is empty. Add a caption, or connect media_uuids.")
 
+        key = _digest("post", text, audience, publish_in_minutes, publish_at, price_cents, media)
+        if key in _done:  # before the time checks: an earlier publish_at may have passed since
+            return _again(key, unique_id, "post")
+
         post = {"audience": audience}
         if text.strip():
             post["text"] = text
@@ -259,7 +306,8 @@ class SchedulePost:
         done = f"Scheduled for {_local_time(created.get('publishAt') or when)}" if when else "Published"
         status.say(done)
         log.info("LatentPost: post %s. %s", created["uuid"], done)
-        return (created["uuid"],)
+        _done[key] = ((created["uuid"],), done)
+        return _done[key][0]
 
 
 NODE_CLASS_MAPPINGS = {

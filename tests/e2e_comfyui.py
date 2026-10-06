@@ -112,15 +112,20 @@ def fake():
     try:
         print("1. 2 images to the vault, then a post:", run(workflow("hello")))
         print("   uploads:", len(broker.uploads), "vault:", broker.vault, "posts:", broker.posts)
-        print("2. same again, so cached:", run(workflow("hello"))[0], "posts:", len(broker.posts))
+        print("2. another image and caption:", run(workflow("other", color=0x996633))[0],
+              "uploads:", len(broker.uploads), "posts:", len(broker.posts))
+        # Running 2 evicted 1 from ComfyUI's cache, so every node runs again. Expect no new uploads or posts.
+        print("3. the first again:", run(workflow("hello"))[0], "uploads:", len(broker.uploads),
+              "posts:", len(broker.posts))
+        print("   the nodes said:", [re.sub(r"^.*?LatentPost: ", "", line) for line in comfy.node_log()[-2:]])
         broker.plan = "free"
-        print("3. free plan:", run(workflow("free")))
+        print("4. free plan:", run(workflow("free")))
         broker.plan = "pro"
         broker.fail("POST", "/posts$", 502, "fanvue_unavailable", "Fanvue returned an error (500).", times=5)
         before = len(broker.calls_to("POST", "/posts$"))
-        print("4. 502 on the post:", run(workflow("502")), "attempts:", len(broker.calls_to("POST", "/posts$")) - before)
+        print("5. 502 on the post:", run(workflow("502")), "attempts:", len(broker.calls_to("POST", "/posts$")) - before)
         broker.polls_until_ready = 10 ** 6
-        print("5. cancelled while Fanvue processes:", run(workflow("cancel", color=0x112233), interrupt_after=3))
+        print("6. cancelled while Fanvue processes:", run(workflow("cancel", color=0x112233), interrupt_after=3))
     finally:
         comfy.close()
         broker.close()
