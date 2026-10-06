@@ -12,7 +12,7 @@ Publish your ComfyUI outputs to your Fanvue account. Upload images and videos to
 2. Connect your Fanvue creator account at https://latentpost.com/dashboard and create an API key.
 3. In ComfyUI, paste the key into **Settings → LatentPost → API key**.
    - Settings aren't saved in workflows, so sharing a workflow or an image never shares your key.
-   - Or set the `LATENTPOST_API_KEY` environment variable instead. It wins over Settings. Use it if you run ComfyUI with `--multi-user`, where the nodes can't tell whose settings to read.
+   - ComfyUI's `--multi-user` mode isn't supported yet: the nodes can't tell whose Settings to read.
 
 ## Nodes
 
@@ -69,6 +69,6 @@ Run the tests (standard library only, against a fake broker; nothing reaches lat
 python -m unittest discover -s tests -t tests
 ```
 
-Set `LATENTPOST_URL` to point the nodes at another broker, such as `wrangler dev` (`http://localhost:8787`). Plain `http://` works only for localhost.
+To point the nodes at another broker, such as `wrangler dev`, add `"LatentPost.BrokerURL": "http://localhost:8787"` to `user/default/comfy.settings.json` in your ComfyUI folder. Plain `http://` works only for localhost. The pack reads no environment variables, because the Registry's security scan flags them.
 
 `tests/e2e_comfyui.py` runs the nodes inside a real ComfyUI, started headless; see its docstring for how to use it.

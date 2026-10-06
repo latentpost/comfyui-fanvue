@@ -22,7 +22,8 @@ nodes = sys.modules["latentpost_pack.nodes"]
 
 
 class FakeComfy:
-    """folder_paths, comfy.model_management, comfy.utils and server, recording what the nodes report."""
+    """folder_paths, comfy.cli_args, comfy.model_management, comfy.utils and server, recording what the nodes
+    report. Set .args.multi_user to run as `--multi-user`."""
 
     def __init__(self, user_dir, output_dir):
         self.progress = []  # (value, total)
@@ -42,16 +43,18 @@ class FakeComfy:
         folder_paths = types.ModuleType("folder_paths")
         folder_paths.get_user_directory = lambda: user_dir
         folder_paths.get_output_directory = lambda: output_dir
+        cli_args = types.ModuleType("comfy.cli_args")
+        cli_args.args = self.args = types.SimpleNamespace(multi_user=False)
         model_management = types.ModuleType("comfy.model_management")
         model_management.throw_exception_if_processing_interrupted = lambda: None
         utils = types.ModuleType("comfy.utils")
         utils.ProgressBar = ProgressBar
         comfy = types.ModuleType("comfy")
-        comfy.model_management, comfy.utils = model_management, utils
+        comfy.cli_args, comfy.model_management, comfy.utils = cli_args, model_management, utils
         server = types.ModuleType("server")
         server.PromptServer = PromptServer
-        self.modules = {"folder_paths": folder_paths, "comfy": comfy, "comfy.model_management": model_management,
-                        "comfy.utils": utils, "server": server}
+        self.modules = {"folder_paths": folder_paths, "comfy": comfy, "comfy.cli_args": cli_args,
+                        "comfy.model_management": model_management, "comfy.utils": utils, "server": server}
 
     def install(self, test: unittest.TestCase):
         patcher = mock.patch.dict(sys.modules, self.modules)
@@ -65,12 +68,3 @@ def save_settings(user_dir, settings):
     with open(os.path.join(user_dir, "default", "comfy.settings.json"), "w") as f:
         f.write(json.dumps(settings, indent=4))
 
-
-def clean_env(test: unittest.TestCase, **values):
-    """Run the test with LatentPost's environment variables set to exactly `values`."""
-    patcher = mock.patch.dict(os.environ, values)
-    patcher.start()
-    test.addCleanup(patcher.stop)
-    for name in ("LATENTPOST_API_KEY", "LATENTPOST_URL"):
-        if name not in values:
-            os.environ.pop(name, None)

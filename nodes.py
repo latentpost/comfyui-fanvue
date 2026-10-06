@@ -10,7 +10,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from .client import MAX_UPLOAD_BYTES, MEDIA_TYPES, LatentPostError, load_broker
+from .client import MAX_UPLOAD_BYTES, MEDIA_TYPES, SUPPORT_EMAIL, LatentPostError, load_broker
 
 CATEGORY = "LatentPost"
 AUDIENCES = ["subscribers", "followers-and-subscribers"]
@@ -70,7 +70,13 @@ def _wait(seconds):
 
 def _broker():
     import folder_paths
+    from comfy.cli_args import args
 
+    if args.multi_user:
+        # Each user has their own settings, and a run doesn't say which user queued it.
+        raise LatentPostError("LatentPost doesn't work with ComfyUI's --multi-user mode yet: the nodes can't tell "
+                              f"whose Settings hold the API key. Start ComfyUI without it, or email {SUPPORT_EMAIL}.",
+                              "multi_user")
     return load_broker(folder_paths.get_user_directory(), wait=_wait)
 
 

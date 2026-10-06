@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from support import FakeComfy, clean_env, client, nodes, save_settings
+from support import FakeComfy, client, nodes, save_settings
 from fake_broker import API_KEY, FakeBroker
 
 LatentPostError = client.LatentPostError
@@ -19,8 +19,7 @@ class NodeTest(unittest.TestCase):
         self.user_dir, self.output_dir = tempfile.mkdtemp(), tempfile.mkdtemp()
         self.comfy = FakeComfy(self.user_dir, self.output_dir)
         self.comfy.install(self)
-        clean_env(self, LATENTPOST_URL=self.fake.url)
-        save_settings(self.user_dir, {client.SETTING_ID: API_KEY})
+        save_settings(self.user_dir, {client.SETTING_ID: API_KEY, client.URL_SETTING_ID: self.fake.url})
         for name, value in (("_wait", lambda seconds: None), ("_done", {})):  # a fresh ComfyUI process
             patcher = mock.patch.object(nodes, name, value)
             patcher.start()
@@ -93,6 +92,13 @@ class SaveToVaultTest(NodeTest):
     def test_a_missing_key_stops_before_any_upload(self):
         save_settings(self.user_dir, {client.SETTING_ID: ""})  # cleared in Settings
         self.assertIn("Add your LatentPost API key first", self.error(self.save, "D", "LP", file_paths=self.file("a.mp4")))
+        self.assertEqual(self.fake.calls, [])
+
+    def test_multi_user_mode_says_it_isnt_supported(self):
+        self.comfy.args.multi_user = True
+        self.assertEqual(self.error(self.save, "D", "LP", file_paths=self.file("a.mp4")),
+                         "LatentPost doesn't work with ComfyUI's --multi-user mode yet: the nodes can't tell whose "
+                         "Settings hold the API key. Start ComfyUI without it, or email support@latentpost.com.")
         self.assertEqual(self.fake.calls, [])
 
     def test_a_stop_error_mid_batch_files_what_was_uploaded(self):

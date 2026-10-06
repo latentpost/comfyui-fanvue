@@ -13,10 +13,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 DEFAULT_URL = "https://latentpost.com"
 SUPPORT_EMAIL = "support@latentpost.com"
 SETTING_ID = "LatentPost.APIKey"  # registered by web/latentpost.js
+# Points the nodes at another broker, such as `wrangler dev`. Not on the Settings page: add it to the file by hand.
+URL_SETTING_ID = "LatentPost.BrokerURL"
 SETTING_NAME = "Settings > LatentPost > API key"  # ASCII: ComfyUI logs errors to consoles that may be cp1252
 USER_AGENT = f"LatentPost-ComfyUI/{VERSION}"
 
@@ -82,35 +84,40 @@ def _seconds(value, default=5):
         return default
 
 
-def _key_from_settings(user_dir):
-    """The key from ComfyUI's settings, or "". Only the default user's: --multi-user setups use the variable."""
+def _settings(user_dir):
+    """The default user's ComfyUI settings, or {} if there are none yet or the file is broken."""
     try:
         with open(os.path.join(user_dir, "default", "comfy.settings.json"), encoding="utf-8-sig") as f:
-            value = json.load(f).get(SETTING_ID)
-    except (OSError, ValueError, AttributeError):  # no settings yet, or a broken file ComfyUI will replace
-        return ""
+            settings = json.load(f)
+    except (OSError, ValueError):  # ComfyUI replaces a broken file
+        return {}
+    return settings if isinstance(settings, dict) else {}
+
+
+def _text_setting(settings, setting_id):
+    value = settings.get(setting_id)
     return value.strip() if isinstance(value, str) else ""
 
 
 def load_broker(user_dir, wait=time.sleep):
-    """A Broker with the user's API key. LATENTPOST_API_KEY wins over ComfyUI's settings."""
-    base_url = os.environ.get("LATENTPOST_URL", "").strip().rstrip("/") or DEFAULT_URL
+    """A Broker with the API key from ComfyUI's settings. Never from environment variables: the Registry's scan
+    flags packs that read them."""
+    settings = _settings(user_dir)
+    base_url = _text_setting(settings, URL_SETTING_ID).rstrip("/") or DEFAULT_URL
     url = urllib.parse.urlsplit(base_url)
     if url.scheme != "https" and not (url.scheme == "http" and url.hostname in ("localhost", "127.0.0.1", "::1")):
-        raise LatentPostError("LATENTPOST_URL must start with https:// (http:// only works for localhost).")
+        raise LatentPostError(f"{URL_SETTING_ID} in ComfyUI's settings must start with https:// "
+                              "(http:// only works for localhost).")
     dashboard = f"{base_url}/dashboard"
 
-    key = os.environ.get("LATENTPOST_API_KEY", "").strip()
-    source = "the LATENTPOST_API_KEY environment variable"
-    if not key:
-        key, source = _key_from_settings(user_dir), SETTING_NAME
+    key = _text_setting(settings, SETTING_ID)
     if not key:
         raise LatentPostError(f"Add your LatentPost API key first. Copy it from {dashboard} "
                               f"and paste it into ComfyUI's {SETTING_NAME}.", "no_api_key")
     if not key.startswith("fvc_") or any(c.isspace() for c in key):
-        raise LatentPostError(f"The API key in {source} doesn't look right: keys start with fvc_ "
+        raise LatentPostError(f"The API key in {SETTING_NAME} doesn't look right: keys start with fvc_ "
                               f"and have no spaces. Copy it again from {dashboard}", "no_api_key")
-    return Broker(key, base_url, key_source=source, wait=wait)
+    return Broker(key, base_url, key_source=SETTING_NAME, wait=wait)
 
 
 class Broker:

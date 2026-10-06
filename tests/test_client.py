@@ -1,11 +1,12 @@
 import io
 import os
+import re
 import tempfile
 import unittest
 import urllib.error
 from unittest import mock
 
-from support import PACK_DIR, clean_env, client, save_settings
+from support import PACK_DIR, client, save_settings
 from fake_broker import API_KEY, FakeBroker
 
 LatentPostError = client.LatentPostError
@@ -224,8 +225,11 @@ class LoadBrokerTest(unittest.TestCase):
     def setUp(self):
         self.user_dir = tempfile.mkdtemp()
 
-    def save_key(self, value):
-        save_settings(self.user_dir, {"Comfy.ColorPalette": "dark", client.SETTING_ID: value})
+    def save_key(self, value, url=None):
+        settings = {"Comfy.ColorPalette": "dark", client.SETTING_ID: value}
+        if url is not None:
+            settings[client.URL_SETTING_ID] = url
+        save_settings(self.user_dir, settings)
 
     def error(self):
         with self.assertRaises(LatentPostError) as caught:
@@ -233,21 +237,16 @@ class LoadBrokerTest(unittest.TestCase):
         return str(caught.exception)
 
     def test_reads_the_key_from_comfyui_settings(self):
-        clean_env(self)
         self.save_key(f"  {API_KEY}\n")
         broker = client.load_broker(self.user_dir)
         self.assertEqual((broker.api_key, broker.base_url, broker.key_source),
                          (API_KEY, "https://latentpost.com", "Settings > LatentPost > API key"))
 
-    def test_environment_wins(self):
-        clean_env(self, LATENTPOST_API_KEY="fvc_from_env", LATENTPOST_URL="http://localhost:8787/")
-        self.save_key(API_KEY)
-        broker = client.load_broker(self.user_dir)
-        self.assertEqual((broker.api_key, broker.base_url), ("fvc_from_env", "http://localhost:8787"))
-        self.assertEqual(broker.key_source, "the LATENTPOST_API_KEY environment variable")
+    def test_a_broker_url_setting_points_the_nodes_elsewhere(self):
+        self.save_key(API_KEY, url=" http://localhost:8787/ ")
+        self.assertEqual(client.load_broker(self.user_dir).base_url, "http://localhost:8787")
 
     def test_missing_key_says_where_to_put_it(self):
-        clean_env(self)
         missing = ("Add your LatentPost API key first. Copy it from https://latentpost.com/dashboard "
                    "and paste it into ComfyUI's Settings > LatentPost > API key.")
         self.assertEqual(self.error(), missing)  # no settings file yet
@@ -261,7 +260,6 @@ class LoadBrokerTest(unittest.TestCase):
         self.assertEqual(self.error(), missing)
 
     def test_rejects_something_that_isnt_a_key(self):
-        clean_env(self)
         self.save_key("Copy your key from the dashboard")
         self.assertEqual(self.error(), "The API key in Settings > LatentPost > API key doesn't look right: keys start "
                                        "with fvc_ and have no spaces. Copy it again from https://latentpost.com/dashboard")
@@ -271,8 +269,18 @@ class LoadBrokerTest(unittest.TestCase):
             self.assertIn(f'id: "{client.SETTING_ID}"', f.read())
 
     def test_refuses_plain_http_except_on_localhost(self):
-        clean_env(self, LATENTPOST_API_KEY=API_KEY, LATENTPOST_URL="http://latentpost.com")
-        self.assertEqual(self.error(), "LATENTPOST_URL must start with https:// (http:// only works for localhost).")
+        self.save_key(API_KEY, url="http://latentpost.com")
+        self.assertEqual(self.error(), "LatentPost.BrokerURL in ComfyUI's settings must start with https:// "
+                                       "(http:// only works for localhost).")
+
+    def test_the_pack_reads_no_environment_variables(self):
+        # The Registry's scan flags any read of them; it flagged 0.1.0 for LATENTPOST_URL and LATENTPOST_API_KEY.
+        for root, dirs, files in os.walk(PACK_DIR):
+            dirs[:] = [d for d in dirs if d != "tests"]  # .comfyignore leaves tests out of the Registry archive
+            for name in files:
+                if name.endswith((".py", ".js")):
+                    with open(os.path.join(root, name), encoding="utf-8") as f:
+                        self.assertEqual(re.findall(r"os\.environ|getenv|process\.env", f.read()), [], name)
 
 
 if __name__ == "__main__":
