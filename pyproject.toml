@@ -1,0 +1,24 @@
+[project]
+# The Registry id. It can never change once published.
+name = "comfyui-fanvue"
+version = "0.1.0"
+description = "Publish your ComfyUI outputs to your Fanvue account: upload images and videos to your vault and schedule posts. Needs a free LatentPost account."
+authors = [{ name = "LatentPost", email = "support@latentpost.com" }]
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+# Standard library only. Image encoding uses the numpy and Pillow that ComfyUI already ships.
+dependencies = []
+classifiers = ["Operating System :: OS Independent"]
+
+[project.urls]
+Homepage = "https://latentpost.com"
+Repository = "https://github.com/latentpost/comfyui-fanvue"
+# comfy-cli reads "Issues", not "Bug Tracker".
+Issues = "https://github.com/latentpost/comfyui-fanvue/issues"
+
+[tool.comfy]
+# Create the publisher with this ID at https://registry.comfy.org (it can't be renamed later).
+PublisherId = "latentpost"
+DisplayName = "LatentPost for Fanvue"
+# Tested on 0.3.44.
+requires-comfyui = ">=0.3.44"
