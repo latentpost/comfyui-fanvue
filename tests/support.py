@@ -1,6 +1,7 @@
 """Loads the node pack the way ComfyUI does, with stand-ins for the ComfyUI modules it imports."""
 
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -56,6 +57,13 @@ class FakeComfy:
         patcher = mock.patch.dict(sys.modules, self.modules)
         patcher.start()
         test.addCleanup(patcher.stop)
+
+
+def save_settings(user_dir, settings):
+    """Write user/default/comfy.settings.json the way ComfyUI does when a setting changes."""
+    os.makedirs(os.path.join(user_dir, "default"), exist_ok=True)
+    with open(os.path.join(user_dir, "default", "comfy.settings.json"), "w") as f:
+        f.write(json.dumps(settings, indent=4))
 
 
 def clean_env(test: unittest.TestCase, **values):

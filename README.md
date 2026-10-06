@@ -10,10 +10,9 @@ Publish your ComfyUI outputs to your Fanvue account. Upload images and videos to
 
 1. Install **LatentPost for Fanvue** from ComfyUI Manager, or clone this folder into `ComfyUI/custom_nodes/`.
 2. Connect your Fanvue creator account at https://latentpost.com/dashboard and create an API key.
-3. Save the key as a text file named `latentpost_api_key.txt` in ComfyUI's `user` folder (next to `user/default`). For example, `ComfyUI/user/latentpost_api_key.txt`.
-   - If the file is missing, the node's error message shows the exact path to use.
-   - Or set the `LATENTPOST_API_KEY` environment variable instead.
-   - Don't put the key in a workflow. Workflows get shared and embedded in images.
+3. In ComfyUI, paste the key into **Settings → LatentPost → API key**.
+   - Settings aren't saved in workflows, so sharing a workflow or an image never shares your key.
+   - Or set the `LATENTPOST_API_KEY` environment variable instead. It wins over Settings. Use it if you run ComfyUI with `--multi-user`, where the nodes can't tell whose settings to read.
 
 ## Nodes
 
@@ -53,7 +52,7 @@ ComfyUI only re-runs a node when its inputs change. Queueing the same workflow t
 
 Error messages are written to be read as they are. The common ones:
 
-- **API key not recognised**: create a new key on the dashboard and save it in the key file again.
+- **API key not recognised**: create a new key on the dashboard and paste it into Settings → LatentPost → API key again.
 - **Reconnect your account**: your Fanvue sign-in expired. Reconnect on the dashboard; your API key keeps working.
 - **Free uploads used up**, or **needs Pro**: upgrade on the dashboard.
 - **Fanvue's rate limit**: the node waits and retries by itself.

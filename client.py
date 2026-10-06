@@ -13,10 +13,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 DEFAULT_URL = "https://latentpost.com"
 SUPPORT_EMAIL = "support@latentpost.com"
-KEY_FILENAME = "latentpost_api_key.txt"
+SETTING_ID = "LatentPost.APIKey"  # registered by web/latentpost.js
+SETTING_NAME = "Settings > LatentPost > API key"  # ASCII: ComfyUI logs errors to consoles that may be cp1252
 USER_AGENT = f"LatentPost-ComfyUI/{VERSION}"
 
 MAX_UPLOAD_BYTES = 1_610_612_736  # Fanvue's 1.5 GB limit
@@ -81,8 +82,18 @@ def _seconds(value, default=5):
         return default
 
 
+def _key_from_settings(user_dir):
+    """The key from ComfyUI's settings, or "". Only the default user's: --multi-user setups use the variable."""
+    try:
+        with open(os.path.join(user_dir, "default", "comfy.settings.json"), encoding="utf-8-sig") as f:
+            value = json.load(f).get(SETTING_ID)
+    except (OSError, ValueError, AttributeError):  # no settings yet, or a broken file ComfyUI will replace
+        return ""
+    return value.strip() if isinstance(value, str) else ""
+
+
 def load_broker(user_dir, wait=time.sleep):
-    """A Broker with the user's API key. LATENTPOST_API_KEY wins over the key file."""
+    """A Broker with the user's API key. LATENTPOST_API_KEY wins over ComfyUI's settings."""
     base_url = os.environ.get("LATENTPOST_URL", "").strip().rstrip("/") or DEFAULT_URL
     url = urllib.parse.urlsplit(base_url)
     if url.scheme != "https" and not (url.scheme == "http" and url.hostname in ("localhost", "127.0.0.1", "::1")):
@@ -92,18 +103,10 @@ def load_broker(user_dir, wait=time.sleep):
     key = os.environ.get("LATENTPOST_API_KEY", "").strip()
     source = "the LATENTPOST_API_KEY environment variable"
     if not key:
-        source = os.path.join(user_dir, KEY_FILENAME)
-        # Windows hides extensions, so Notepad users often end up with ".txt.txt".
-        for path in (source, source + ".txt"):
-            try:
-                with open(path, encoding="utf-8-sig") as f:
-                    key = f.read().strip()
-                break
-            except FileNotFoundError:
-                continue
+        key, source = _key_from_settings(user_dir), SETTING_NAME
     if not key:
         raise LatentPostError(f"Add your LatentPost API key first. Copy it from {dashboard} "
-                              f"and save it as a text file here:\n{source}", "no_api_key")
+                              f"and paste it into ComfyUI's {SETTING_NAME}.", "no_api_key")
     if not key.startswith("fvc_") or any(c.isspace() for c in key):
         raise LatentPostError(f"The API key in {source} doesn't look right: keys start with fvc_ "
                               f"and have no spaces. Copy it again from {dashboard}", "no_api_key")

@@ -1,19 +1,21 @@
 """Run the nodes inside a real ComfyUI, started headless on a spare port. Not part of the unit tests.
 
   python tests/e2e_comfyui.py fake         # against the fake broker; uses a scratch user folder
-  python tests/e2e_comfyui.py plan         # the plan latentpost.com sees for your key file (never prints the key)
+  python tests/e2e_comfyui.py plan         # the plan latentpost.com sees for your saved key (never prints the key)
   python tests/e2e_comfyui.py live --yes   # REAL: 1 plain image to vault folder "LatentPost test", plus a
                                            # subscribers-only post 60 minutes out. Delete it in Fanvue after.
                                            # Add --price 300 for a paid post.
 
 COMFY_DIR is the folder with ComfyUI's main.py. It defaults to ComfyUI Desktop's install. Its Python is
-COMFY_DIR/.venv, or COMFY_PY. The live and plan modes read the key from COMFY_DIR/user, as the nodes do.
-Close the ComfyUI app first: the headless copy shares its user folder.
+COMFY_DIR/.venv, or COMFY_PY. The headless ComfyUI loads this checkout's pack and no other custom nodes,
+whatever is installed in COMFY_DIR/custom_nodes. The live and plan modes read the key saved in
+Settings → LatentPost, in COMFY_DIR/user. Close the ComfyUI app first: the headless copy shares that folder.
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,7 +23,7 @@ import time
 import urllib.request
 
 from fake_broker import API_KEY, FakeBroker
-from support import client
+from support import PACK_DIR, client, save_settings
 
 COMFY_DIR = os.environ.get("COMFY_DIR") or os.path.join(
     os.environ.get("LOCALAPPDATA", ""), "Comfy-Desktop", "ComfyUI-Installs", "ComfyUI", "ComfyUI")
@@ -68,12 +70,17 @@ def workflow(text, folder="E2E", size=64, batch=2, color=0x336699, price=0):
 
 
 class Comfy:
-    def __init__(self, env, args):
+    def __init__(self, env, user_dir):
         env = dict(env, PYTHONUTF8="1")  # other node packs log emoji, which cp1252 can't write
+        # A scratch base folder whose custom_nodes holds only a copy of this checkout's pack.
+        base = tempfile.mkdtemp()
+        shutil.copytree(PACK_DIR, os.path.join(base, "custom_nodes", "comfyui-fanvue"),
+                        ignore=shutil.ignore_patterns("tests", "__pycache__", ".git"))
         self.log_path = os.path.join(tempfile.gettempdir(), f"latentpost_e2e_comfy_{PORT}.log")
         self.log = open(self.log_path, "w", encoding="utf-8")
         self.process = subprocess.Popen(
-            [COMFY_PY, "main.py", "--port", str(PORT), "--listen", "127.0.0.1", "--disable-auto-launch", *args],
+            [COMFY_PY, "main.py", "--port", str(PORT), "--listen", "127.0.0.1", "--disable-auto-launch",
+             "--base-directory", base, "--user-directory", user_dir],
             cwd=COMFY_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT)
         for _ in range(600):
             if self.process.poll() is not None:
@@ -97,8 +104,11 @@ class Comfy:
 
 def fake():
     broker = FakeBroker(part_size=1000)
-    env = dict(os.environ, LATENTPOST_URL=broker.url, LATENTPOST_API_KEY=API_KEY)
-    comfy = Comfy(env, ["--user-directory", tempfile.mkdtemp()])
+    env = {k: v for k, v in os.environ.items() if k != "LATENTPOST_API_KEY"}
+    env["LATENTPOST_URL"] = broker.url
+    user_dir = tempfile.mkdtemp()
+    save_settings(user_dir, {client.SETTING_ID: API_KEY})  # as if pasted into Settings → LatentPost
+    comfy = Comfy(env, user_dir)
     try:
         print("1. 2 images to the vault, then a post:", run(workflow("hello")))
         print("   uploads:", len(broker.uploads), "vault:", broker.vault, "posts:", broker.posts)
@@ -128,8 +138,8 @@ def live():
     if "--yes" not in sys.argv:
         raise SystemExit("This creates a real scheduled post. Run again with --yes.")
     price = int(sys.argv[sys.argv.index("--price") + 1]) if "--price" in sys.argv else 0
-    env ={k: v for k, v in os.environ.items() if k not in ("LATENTPOST_URL", "LATENTPOST_API_KEY")}
-    comfy = Comfy(env, [])
+    env = {k: v for k, v in os.environ.items() if k not in ("LATENTPOST_URL", "LATENTPOST_API_KEY")}
+    comfy = Comfy(env, os.path.join(COMFY_DIR, "user"))
     try:
         print(run(workflow("LatentPost test post. Please ignore.", folder="LatentPost test", size=512, batch=1,
                            color=0x5A7FA8, price=price), timeout=900))

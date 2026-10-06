@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from support import FakeComfy, clean_env, client, nodes
+from support import FakeComfy, clean_env, client, nodes, save_settings
 from fake_broker import API_KEY, FakeBroker
 
 LatentPostError = client.LatentPostError
@@ -20,8 +20,7 @@ class NodeTest(unittest.TestCase):
         self.comfy = FakeComfy(self.user_dir, self.output_dir)
         self.comfy.install(self)
         clean_env(self, LATENTPOST_URL=self.fake.url)
-        with open(os.path.join(self.user_dir, client.KEY_FILENAME), "w") as f:
-            f.write(API_KEY)
+        save_settings(self.user_dir, {client.SETTING_ID: API_KEY})
         patcher = mock.patch.object(nodes, "_wait", lambda seconds: None)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -68,7 +67,7 @@ class SaveToVaultTest(NodeTest):
         self.assertEqual(self.fake.calls, [])
 
     def test_a_missing_key_stops_before_any_upload(self):
-        os.remove(os.path.join(self.user_dir, client.KEY_FILENAME))
+        save_settings(self.user_dir, {client.SETTING_ID: ""})  # cleared in Settings
         self.assertIn("Add your LatentPost API key first", self.error(self.save, "D", "LP", file_paths=self.file("a.mp4")))
         self.assertEqual(self.fake.calls, [])
 

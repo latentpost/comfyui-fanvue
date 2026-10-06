@@ -5,7 +5,7 @@ import unittest
 import urllib.error
 from unittest import mock
 
-from support import clean_env, client
+from support import PACK_DIR, clean_env, client, save_settings
 from fake_broker import API_KEY, FakeBroker
 
 LatentPostError = client.LatentPostError
@@ -16,7 +16,7 @@ class BrokerTest(unittest.TestCase):
         self.fake = FakeBroker(part_size=4)
         self.addCleanup(self.fake.close)
         self.waits = []
-        self.broker = client.Broker(API_KEY, self.fake.url, key_source="the key file", wait=self.waits.append)
+        self.broker = client.Broker(API_KEY, self.fake.url, key_source=client.SETTING_NAME, wait=self.waits.append)
 
     def upload(self, data=b"hello world", progress=None):
         return self.broker.upload("out.png", "image", io.BytesIO(data), len(data), on_progress=progress)
@@ -190,7 +190,7 @@ class ErrorTableTest(BrokerTest):
     def test_invalid_api_key_says_where_the_key_comes_from(self):
         self.broker.api_key = "fvc_wrong"
         self.assertEqual(str(self.failure()), f"API key not recognised. Copy a new one from {self.fake.url}/dashboard"
-                                              "\nLatentPost reads your key from the key file.")
+                                              "\nLatentPost reads your key from Settings > LatentPost > API key.")
         self.assertEqual(len(self.fake.calls), 1)
 
     def test_reconnect_required_shows_the_dashboard_link(self):
@@ -223,45 +223,52 @@ class ErrorTableTest(BrokerTest):
 class LoadBrokerTest(unittest.TestCase):
     def setUp(self):
         self.user_dir = tempfile.mkdtemp()
-        self.key_file = os.path.join(self.user_dir, "latentpost_api_key.txt")
 
-    def write_key(self, text, path=None):
-        with open(path or self.key_file, "w", encoding="utf-8-sig") as f:
-            f.write(text)
+    def save_key(self, value):
+        save_settings(self.user_dir, {"Comfy.ColorPalette": "dark", client.SETTING_ID: value})
 
     def error(self):
         with self.assertRaises(LatentPostError) as caught:
             client.load_broker(self.user_dir)
         return str(caught.exception)
 
-    def test_reads_the_key_file(self):
+    def test_reads_the_key_from_comfyui_settings(self):
         clean_env(self)
-        self.write_key(f"  {API_KEY}\r\n")  # with a BOM, as Notepad may save it
+        self.save_key(f"  {API_KEY}\n")
         broker = client.load_broker(self.user_dir)
         self.assertEqual((broker.api_key, broker.base_url, broker.key_source),
-                         (API_KEY, "https://latentpost.com", self.key_file))
-
-    def test_finds_a_key_file_saved_as_txt_txt(self):
-        clean_env(self)
-        self.write_key(API_KEY, self.key_file + ".txt")
-        self.assertEqual(client.load_broker(self.user_dir).api_key, API_KEY)
+                         (API_KEY, "https://latentpost.com", "Settings > LatentPost > API key"))
 
     def test_environment_wins(self):
         clean_env(self, LATENTPOST_API_KEY="fvc_from_env", LATENTPOST_URL="http://localhost:8787/")
-        self.write_key(API_KEY)
+        self.save_key(API_KEY)
         broker = client.load_broker(self.user_dir)
         self.assertEqual((broker.api_key, broker.base_url), ("fvc_from_env", "http://localhost:8787"))
         self.assertEqual(broker.key_source, "the LATENTPOST_API_KEY environment variable")
 
     def test_missing_key_says_where_to_put_it(self):
         clean_env(self)
-        self.assertEqual(self.error(), "Add your LatentPost API key first. Copy it from "
-                                       f"https://latentpost.com/dashboard and save it as a text file here:\n{self.key_file}")
+        missing = ("Add your LatentPost API key first. Copy it from https://latentpost.com/dashboard "
+                   "and paste it into ComfyUI's Settings > LatentPost > API key.")
+        self.assertEqual(self.error(), missing)  # no settings file yet
+        for value in ("", "   ", None, 42):
+            self.save_key(value)
+            self.assertEqual(self.error(), missing)
+        save_settings(self.user_dir, ["not", "a", "dict"])
+        self.assertEqual(self.error(), missing)
+        with open(os.path.join(self.user_dir, "default", "comfy.settings.json"), "w") as f:
+            f.write('{"LatentPost.APIKey": "fvc_')  # caught mid-write
+        self.assertEqual(self.error(), missing)
 
     def test_rejects_something_that_isnt_a_key(self):
         clean_env(self)
-        self.write_key("Copy your key from the dashboard")
-        self.assertIn("doesn't look right: keys start with fvc_", self.error())
+        self.save_key("Copy your key from the dashboard")
+        self.assertEqual(self.error(), "The API key in Settings > LatentPost > API key doesn't look right: keys start "
+                                       "with fvc_ and have no spaces. Copy it again from https://latentpost.com/dashboard")
+
+    def test_the_settings_page_uses_the_id_the_nodes_read(self):
+        with open(os.path.join(PACK_DIR, "web", "latentpost.js"), encoding="utf-8") as f:
+            self.assertIn(f'id: "{client.SETTING_ID}"', f.read())
 
     def test_refuses_plain_http_except_on_localhost(self):
         clean_env(self, LATENTPOST_API_KEY=API_KEY, LATENTPOST_URL="http://latentpost.com")
