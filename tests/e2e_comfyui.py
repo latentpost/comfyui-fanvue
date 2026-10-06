@@ -4,6 +4,7 @@
   python tests/e2e_comfyui.py plan         # the plan latentpost.com sees for your key file (never prints the key)
   python tests/e2e_comfyui.py live --yes   # REAL: 1 plain image to vault folder "LatentPost test", plus a
                                            # subscribers-only post 60 minutes out. Delete it in Fanvue after.
+                                           # Add --price 300 for a paid post.
 
 COMFY_DIR is the folder with ComfyUI's main.py. It defaults to ComfyUI Desktop's install. Its Python is
 COMFY_DIR/.venv, or COMFY_PY. The live and plan modes read the key from COMFY_DIR/user, as the nodes do.
@@ -55,14 +56,14 @@ def run(workflow, timeout=120, interrupt_after=None):
     raise SystemExit("timed out waiting for ComfyUI")
 
 
-def workflow(text, folder="E2E", size=64, batch=2, color=0x336699):
+def workflow(text, folder="E2E", size=64, batch=2, color=0x336699, price=0):
     return {
         "1": {"class_type": "EmptyImage", "inputs": {"width": size, "height": size, "batch_size": batch, "color": color}},
         "2": {"class_type": "LatentPostSaveToVault", "inputs": {
             "images": ["1", 0], "folder": folder, "filename_prefix": "latentpost-test", "file_paths": ""}},
         "3": {"class_type": "LatentPostSchedulePost", "inputs": {
             "media_uuids": ["2", 0], "text": text, "audience": "subscribers",
-            "publish_in_minutes": 60, "publish_at": "", "price_cents": 0}},
+            "publish_in_minutes": 60, "publish_at": "", "price_cents": price}},
     }
 
 
@@ -126,11 +127,12 @@ def plan():
 def live():
     if "--yes" not in sys.argv:
         raise SystemExit("This creates a real scheduled post. Run again with --yes.")
-    env = {k: v for k, v in os.environ.items() if k not in ("LATENTPOST_URL", "LATENTPOST_API_KEY")}
+    price = int(sys.argv[sys.argv.index("--price") + 1]) if "--price" in sys.argv else 0
+    env ={k: v for k, v in os.environ.items() if k not in ("LATENTPOST_URL", "LATENTPOST_API_KEY")}
     comfy = Comfy(env, [])
     try:
         print(run(workflow("LatentPost test post. Please ignore.", folder="LatentPost test", size=512, batch=1,
-                           color=0x5A7FA8), timeout=900))
+                           color=0x5A7FA8, price=price), timeout=900))
         for line in comfy.node_log():
             print(re.sub(r"^.*?LatentPost: ", "LatentPost: ", line))
     finally:
