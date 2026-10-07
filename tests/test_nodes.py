@@ -1,11 +1,12 @@
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from support import FakeComfy, client, nodes, save_settings
+from support import PACK_DIR, FakeComfy, client, nodes, save_settings
 from fake_broker import API_KEY, FakeBroker
 
 LatentPostError = client.LatentPostError
@@ -260,6 +261,38 @@ class NodeDefinitionTest(unittest.TestCase):
                 self.assertNotIn("comfy", nodes.NODE_DISPLAY_NAME_MAPPINGS[node_id].lower())  # brand rule
                 # An API key widget would end up in every saved workflow and PNG.
                 self.assertFalse([name for group in inputs.values() for name in group if "key" in name])
+
+    def test_the_example_workflow_matches_the_nodes(self):
+        # ComfyUI fills a node's widgets from widgets_values by position, so an added, removed or reordered
+        # input would quietly shift the example's values. latentpost.com serves this file to store reviewers.
+        with open(os.path.join(PACK_DIR, "example_workflows", "latentpost-test.json"), encoding="utf-8") as f:
+            text = f.read()
+        self.assertNotRegex(text, r"fvc_\w")  # never an API key
+        workflow = json.loads(text)
+        types = {node["id"]: node["type"] for node in workflow["nodes"]}
+        for node in workflow["nodes"]:
+            if node["type"] not in nodes.NODE_CLASS_MAPPINGS:
+                continue
+            with self.subTest(node["type"]):
+                inputs = nodes.NODE_CLASS_MAPPINGS[node["type"]].INPUT_TYPES()
+                widgets = {name: spec for group in ("required", "optional") for name, spec in inputs.get(group, {}).items()
+                           if (isinstance(spec[0], list) or spec[0] in ("STRING", "INT"))
+                           and not spec[1].get("forceInput")}
+                self.assertEqual(list(node["widgets_values_named"]), list(widgets))
+                self.assertEqual(list(node["widgets_values_named"].values()), node["widgets_values"])
+                for name, value in node["widgets_values_named"].items():
+                    kind, options = widgets[name]
+                    if isinstance(kind, list):
+                        self.assertIn(value, kind, name)
+                    elif kind == "INT":
+                        self.assertTrue(options["min"] <= value <= options["max"], name)
+                    else:
+                        self.assertIsInstance(value, str, name)
+        wires = {(types[origin], types[target], next(i["name"] for i in next(
+                  n for n in workflow["nodes"] if n["id"] == target)["inputs"] if i["link"] == link))
+                 for link, origin, _, target, _, _ in workflow["links"]}
+        self.assertEqual(wires, {("EmptyImage", "LatentPostSaveToVault", "images"),
+                                 ("LatentPostSaveToVault", "LatentPostSchedulePost", "media_uuids")})
 
 
 if __name__ == "__main__":

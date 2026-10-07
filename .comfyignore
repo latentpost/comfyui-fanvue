@@ -1,2 +1,4 @@
 # Left out of the archive that `comfy node publish` uploads. Git-ignored files are already left out.
 tests/
+# The Registry shows it from GitHub (Icon in pyproject.toml), so installs don't need it.
+icon.png

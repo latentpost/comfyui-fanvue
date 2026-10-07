@@ -20,5 +20,7 @@ Issues = "https://github.com/latentpost/comfyui-fanvue/issues"
 # Create the publisher with this ID at https://registry.comfy.org (it can't be renamed later).
 PublisherId = "latentpost"
 DisplayName = "LatentPost for Fanvue"
+# The store logo, 512 px. Served from GitHub, so it works only once icon.png is pushed.
+Icon = "https://raw.githubusercontent.com/latentpost/comfyui-fanvue/main/icon.png"
 # Tested on 0.3.44.
 requires-comfyui = ">=0.3.44"

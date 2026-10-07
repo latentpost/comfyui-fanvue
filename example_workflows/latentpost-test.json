@@ -1,0 +1,312 @@
+{
+  "id": "b9de27c7-08a1-4ca6-b143-a198669340ad",
+  "revision": 0,
+  "last_node_id": 4,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        1180,
+        300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Read me",
+      "properties": {},
+      "widgets_values": [
+        "LatentPost test workflow\n\nChecks your LatentPost setup. No AI model needed.\n\n1. Paste your API key into Settings > LatentPost > API key. Get one at latentpost.com/dashboard.\n2. Press Run.\n\nIt uploads 2 plain blue test images to the vault folder \"LatentPost test\", then creates a subscribers-only post scheduled 60 minutes from now.\n\n3. Check the folder and the scheduled post in Fanvue, then delete the post before it goes out.\n\nSchedule Fanvue Post needs LatentPost Pro. Running this again with the same inputs doesn't upload or post a second time."
+      ],
+      "widgets_values_named": {
+        "text": "LatentPost test workflow\n\nChecks your LatentPost setup. No AI model needed.\n\n1. Paste your API key into Settings > LatentPost > API key. Get one at latentpost.com/dashboard.\n2. Press Run.\n\nIt uploads 2 plain blue test images to the vault folder \"LatentPost test\", then creates a subscribers-only post scheduled 60 minutes from now.\n\n3. Check the folder and the scheduled post in Fanvue, then delete the post before it goes out.\n\nSchedule Fanvue Post needs LatentPost Pro. Running this again with the same inputs doesn't upload or post a second time."
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 2,
+      "type": "EmptyImage",
+      "pos": [
+        40,
+        400
+      ],
+      "size": [
+        300,
+        160
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "batch_size",
+          "name": "batch_size",
+          "type": "INT",
+          "widget": {
+            "name": "batch_size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "color",
+          "name": "color",
+          "type": "INT",
+          "widget": {
+            "name": "color"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "EmptyImage"
+      },
+      "widgets_values": [
+        512,
+        512,
+        2,
+        5930920
+      ],
+      "widgets_values_named": {
+        "width": 512,
+        "height": 512,
+        "batch_size": 2,
+        "color": 5930920
+      }
+    },
+    {
+      "id": 3,
+      "type": "LatentPostSaveToVault",
+      "pos": [
+        380,
+        400
+      ],
+      "size": [
+        400,
+        230
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "localized_name": "folder",
+          "name": "folder",
+          "type": "STRING",
+          "widget": {
+            "name": "folder"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "file_paths",
+          "name": "file_paths",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "file_paths"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "media_uuids",
+          "name": "media_uuids",
+          "type": "STRING",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LatentPostSaveToVault"
+      },
+      "widgets_values": [
+        "LatentPost test",
+        "latentpost-test",
+        ""
+      ],
+      "widgets_values_named": {
+        "folder": "LatentPost test",
+        "filename_prefix": "latentpost-test",
+        "file_paths": ""
+      }
+    },
+    {
+      "id": 4,
+      "type": "LatentPostSchedulePost",
+      "pos": [
+        820,
+        400
+      ],
+      "size": [
+        400,
+        300
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "media_uuids",
+          "name": "media_uuids",
+          "shape": 7,
+          "type": "STRING",
+          "link": 2
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "audience",
+          "name": "audience",
+          "type": "COMBO",
+          "widget": {
+            "name": "audience"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "publish_in_minutes",
+          "name": "publish_in_minutes",
+          "type": "INT",
+          "widget": {
+            "name": "publish_in_minutes"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "publish_at",
+          "name": "publish_at",
+          "type": "STRING",
+          "widget": {
+            "name": "publish_at"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "price_cents",
+          "name": "price_cents",
+          "type": "INT",
+          "widget": {
+            "name": "price_cents"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "post_uuid",
+          "name": "post_uuid",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LatentPostSchedulePost"
+      },
+      "widgets_values": [
+        "LatentPost test post. Please ignore.",
+        "subscribers",
+        60,
+        "",
+        0
+      ],
+      "widgets_values_named": {
+        "text": "LatentPost test post. Please ignore.",
+        "audience": "subscribers",
+        "publish_in_minutes": 60,
+        "publish_at": "",
+        "price_cents": 0
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      3,
+      0,
+      4,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [
+        30,
+        20
+      ]
+    }
+  },
+  "version": 0.4
+}

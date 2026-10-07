@@ -14,6 +14,10 @@ Publish your ComfyUI outputs to your Fanvue account. Upload images and videos to
    - Settings aren't saved in workflows, so sharing a workflow or an image never shares your key.
    - ComfyUI's `--multi-user` mode isn't supported yet: the nodes can't tell whose Settings to read.
 
+## Try it
+
+`example_workflows/latentpost-test.json` checks your setup without any AI model. Find it in ComfyUI's **Templates** under `comfyui-fanvue`, or drag the file onto the canvas. It uploads 2 plain test images to the vault folder "LatentPost test" and creates a subscribers-only post scheduled 60 minutes out. Delete the post in Fanvue before it goes out.
+
 ## Nodes
 
 Both are in the **LatentPost** category.
