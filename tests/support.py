@@ -23,11 +23,14 @@ nodes = sys.modules["latentpost_pack.nodes"]
 
 class FakeComfy:
     """folder_paths, comfy.cli_args, comfy.model_management, comfy.utils and server, recording what the nodes
-    report. Set .args.multi_user to run as `--multi-user`."""
+    report. Set .args.multi_user to run as `--multi-user`. ComfyUI's folders are .dirs, made inside base."""
 
-    def __init__(self, user_dir, output_dir):
+    def __init__(self, base):
         self.progress = []  # (value, total)
         self.texts = []
+        self.dirs = {name: os.path.join(base, name) for name in ("user", "output", "input", "temp")}
+        for path in self.dirs.values():
+            os.makedirs(path)
         fake = self
 
         class ProgressBar:
@@ -41,8 +44,10 @@ class FakeComfy:
             instance = types.SimpleNamespace(send_progress_text=lambda text, node_id, sid=None: fake.texts.append(text))
 
         folder_paths = types.ModuleType("folder_paths")
-        folder_paths.get_user_directory = lambda: user_dir
-        folder_paths.get_output_directory = lambda: output_dir
+        folder_paths.get_user_directory = lambda: self.dirs["user"]
+        folder_paths.get_output_directory = lambda: self.dirs["output"]
+        folder_paths.get_input_directory = lambda: self.dirs["input"]
+        folder_paths.get_temp_directory = lambda: self.dirs["temp"]
         cli_args = types.ModuleType("comfy.cli_args")
         cli_args.args = self.args = types.SimpleNamespace(multi_user=False)
         model_management = types.ModuleType("comfy.model_management")

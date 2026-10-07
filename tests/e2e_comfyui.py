@@ -70,11 +70,16 @@ def workflow(text, folder="E2E", size=64, batch=2, color=0x336699, price=0):
     }
 
 
+def files_workflow(file_paths):
+    return {"1": {"class_type": "LatentPostSaveToVault", "inputs": {
+        "folder": "E2E", "filename_prefix": "latentpost-test", "file_paths": file_paths}}}
+
+
 class Comfy:
     def __init__(self, user_dir, *args):
         env = dict(os.environ, PYTHONUTF8="1")  # other node packs log emoji, which cp1252 can't write
         # A scratch base folder whose custom_nodes holds only a copy of this checkout's pack.
-        base = tempfile.mkdtemp()
+        self.base = base = tempfile.mkdtemp()
         shutil.copytree(PACK_DIR, os.path.join(base, "custom_nodes", "comfyui-fanvue"),
                         ignore=shutil.ignore_patterns("tests", "__pycache__", ".git"))
         self.log_path = os.path.join(tempfile.gettempdir(), f"latentpost_e2e_comfy_{PORT}.log")
@@ -126,10 +131,19 @@ def fake():
         print("5. 502 on the post:", run(workflow("502")), "attempts:", len(broker.calls_to("POST", "/posts$")) - before)
         broker.polls_until_ready = 10 ** 6
         print("6. cancelled while Fanvue processes:", run(workflow("cancel", color=0x112233), interrupt_after=3))
+        broker.polls_until_ready = 1
+        os.makedirs(os.path.join(comfy.base, "output", "video"), exist_ok=True)
+        outside = os.path.join(user_dir, "private.mp4")
+        for path in (os.path.join(comfy.base, "output", "video", "clip.mp4"), outside):
+            with open(path, "wb") as f:
+                f.write(b"not really a video")
+        before = len(broker.uploads)
+        print("7. a file in output/, then one outside it:", run(files_workflow("video/clip.mp4"))[0],
+              run(files_workflow(outside)), "uploads:", len(broker.uploads) - before)
         comfy.close()
         comfy = Comfy(user_dir, "--multi-user")
         before = len(broker.calls)
-        print("7. --multi-user:", run(workflow("multi", color=0x445566)), "calls:", len(broker.calls) - before)
+        print("8. --multi-user:", run(workflow("multi", color=0x445566)), "calls:", len(broker.calls) - before)
     finally:
         comfy.close()
         broker.close()

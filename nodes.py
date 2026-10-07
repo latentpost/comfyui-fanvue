@@ -113,17 +113,32 @@ def _png(image):
     return buffer
 
 
+def _inside(path, folder):
+    path, folder = os.path.normcase(path), os.path.normcase(folder)
+    try:
+        return os.path.commonpath([path, folder]) == folder
+    except ValueError:  # on another drive
+        return False
+
+
 def _paths(file_paths):
-    """One path per line. Quotes from Windows' "Copy as path" are fine; relative means the output folder."""
+    """One path per line. Quotes from Windows' "Copy as path" are fine; relative means the output folder.
+    Only files in ComfyUI's output, input and temp folders, after following links: a shared workflow
+    mustn't be able to upload any other file on the computer."""
+    import folder_paths
+
+    folders = [os.path.realpath(folder) for folder in (folder_paths.get_output_directory(),
+                                                        folder_paths.get_input_directory(),
+                                                        folder_paths.get_temp_directory())]
     paths = []
     for line in file_paths.splitlines():
         path = line.strip().strip('"').strip()
         if not path:
             continue
-        if not os.path.isabs(path):
-            import folder_paths
-
-            path = os.path.join(folder_paths.get_output_directory(), path)
+        path = os.path.realpath(os.path.join(folder_paths.get_output_directory(), path))  # absolute stays as is
+        if not any(_inside(path, folder) for folder in folders):
+            raise LatentPostError(f"Can't upload {path}: LatentPost only uploads files from ComfyUI's output, input "
+                                  "and temp folders. Save or copy the file into one of them.")
         media_type = MEDIA_TYPES.get(os.path.splitext(path)[1].lower())
         if media_type is None:
             raise LatentPostError(f"Can't upload {os.path.basename(path)}: use one of {' '.join(MEDIA_TYPES)}.")
@@ -137,8 +152,9 @@ def _paths(file_paths):
 
 
 class SaveToVault:
-    DESCRIPTION = ("Uploads images, or files on disk such as videos, to your Fanvue vault. Media goes straight "
-                   "from this computer to Fanvue; LatentPost never sees it. Workflow metadata isn't included.")
+    DESCRIPTION = ("Uploads images, or files such as videos from ComfyUI's output folder, to your Fanvue vault. "
+                   "Media goes straight from this computer to Fanvue; LatentPost never sees it. "
+                   "Workflow metadata isn't included.")
     CATEGORY = CATEGORY
     FUNCTION = "save"
     OUTPUT_NODE = True
@@ -158,7 +174,8 @@ class SaveToVault:
             "optional": {
                 "images": ("IMAGE", {"tooltip": "Images to upload, as PNG."}),
                 "file_paths": ("STRING", {"multiline": True, "default": "", "tooltip":
-                               "Files to upload, one path per line. Relative paths are inside ComfyUI's output folder."}),
+                               "Files to upload, one path per line, from ComfyUI's output, input or temp folder. "
+                               "Relative paths are inside the output folder."}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
         }

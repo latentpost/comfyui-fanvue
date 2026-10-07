@@ -20,18 +20,20 @@ Both are in the **LatentPost** category.
 
 ### Save to Fanvue Vault
 
-Uploads images, or files already on disk, and files them in a vault folder.
+Uploads images, or files your workflow saved, and files them in a vault folder.
 
 | Input | |
 |---|---|
 | `images` | Images to upload, as PNG. |
-| `file_paths` | Files to upload, such as videos, one path per line. Relative paths are inside ComfyUI's `output` folder. |
+| `file_paths` | Files to upload, such as videos, one path per line, from ComfyUI's `output`, `input` or `temp` folder. Relative paths are inside `output`. |
 | `folder` | Vault folder, created if it doesn't exist. Leave empty for no folder. |
 | `filename_prefix` | Images are named `<prefix>_<date>-<time>_<n>.png`. Files keep their own names. |
 
 The output is the Fanvue media IDs, one per line. Connect it to Schedule Fanvue Post.
 
 Supported files: `.png .jpg .jpeg .webp .gif .mp4 .mov .webm .m4v .mp3 .wav .m4a .ogg .flac`, up to 1.5 GB each.
+
+Files anywhere else are refused, even through a symlink or junction, so a workflow someone shares with you can't upload other files from your computer. To upload one, save or copy it into ComfyUI's `input` folder first.
 
 ### Schedule Fanvue Post
 

@@ -16,9 +16,10 @@ class NodeTest(unittest.TestCase):
     def setUp(self):
         self.fake = FakeBroker(part_size=4)
         self.addCleanup(self.fake.close)
-        self.user_dir, self.output_dir = tempfile.mkdtemp(), tempfile.mkdtemp()
-        self.comfy = FakeComfy(self.user_dir, self.output_dir)
+        self.base = tempfile.mkdtemp()
+        self.comfy = FakeComfy(self.base)
         self.comfy.install(self)
+        self.user_dir, self.output_dir = self.comfy.dirs["user"], self.comfy.dirs["output"]
         save_settings(self.user_dir, {client.SETTING_ID: API_KEY, client.URL_SETTING_ID: self.fake.url})
         for name, value in (("_wait", lambda seconds: None), ("_done", {})):  # a fresh ComfyUI process
             patcher = mock.patch.object(nodes, name, value)
@@ -41,7 +42,7 @@ class SaveToVaultTest(NodeTest):
     save = nodes.SaveToVault().save
 
     def test_uploads_files_and_files_them_in_one_vault_call(self):
-        elsewhere = self.file("clip.mp4", b"0123456789", folder=self.user_dir)
+        elsewhere = self.file("clip.mp4", b"0123456789", folder=self.comfy.dirs["input"])
         self.file("still.png", b"png")
         paths = f'"{elsewhere}"\n\n  still.png  \n'  # quoted as Windows copies it; relative to output/
         self.assertEqual(self.save("Drafts", "LP", file_paths=paths), ("media-1\nmedia-2",))
@@ -84,9 +85,39 @@ class SaveToVaultTest(NodeTest):
         self.assertEqual(self.error(self.save, "Drafts", "LP"), "Nothing to upload. Connect images, or enter file paths.")
         self.assertIn("Can't upload notes.txt: use one of .png", self.error(self.save, "D", "LP", file_paths="notes.txt"))
         missing = os.path.join(self.output_dir, "gone.mp4")
-        self.assertEqual(self.error(self.save, "D", "LP", file_paths=missing), f"File not found: {missing}")
+        self.assertEqual(self.error(self.save, "D", "LP", file_paths=missing),
+                         f"File not found: {os.path.realpath(missing)}")
         empty = self.file("empty.mp4", b"")
         self.assertIn("Fanvue takes files from 1 byte to 1.5 GB", self.error(self.save, "D", "LP", file_paths=empty))
+        self.assertEqual(self.fake.calls, [])
+
+    def test_takes_files_only_from_comfyuis_output_input_and_temp_folders(self):
+        allowed = [self.file("clip.mp4", folder=self.comfy.dirs[name]) for name in ("input", "temp")]
+        self.assertEqual(self.save("D", "LP", file_paths="\n".join(allowed)), ("media-1\nmedia-2",))
+
+        os.makedirs(os.path.join(self.base, "output2"))  # starts like the output folder's path, but isn't in it
+        for paths in (self.file("private.png", folder=self.user_dir), "../user/private.png",
+                      self.file("old.mp4", folder=os.path.join(self.base, "output2"))):
+            with self.subTest(paths):
+                outside = os.path.realpath(os.path.join(self.output_dir, paths))
+                self.assertEqual(self.error(self.save, "D", "LP", file_paths=paths),
+                                 f"Can't upload {outside}: LatentPost only uploads files from ComfyUI's output, "
+                                 "input and temp folders. Save or copy the file into one of them.")
+        self.assertEqual(len(self.fake.uploads), 2)
+
+    def test_a_link_out_of_the_output_folder_is_refused(self):
+        self.file("private.png", folder=self.user_dir)
+        link = os.path.join(self.output_dir, "linked")
+        try:
+            os.symlink(self.user_dir, link, target_is_directory=True)
+        except OSError:  # Windows allows symlinks only in developer mode, but junctions always
+            if os.name != "nt":
+                raise
+            import _winapi
+
+            _winapi.CreateJunction(self.user_dir, link)
+        self.assertIn("LatentPost only uploads files from ComfyUI's output, input and temp folders",
+                      self.error(self.save, "D", "LP", file_paths="linked/private.png"))
         self.assertEqual(self.fake.calls, [])
 
     def test_a_missing_key_stops_before_any_upload(self):

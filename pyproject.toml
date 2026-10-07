@@ -1,7 +1,7 @@
 [project]
 # The Registry id. It can never change once published.
 name = "comfyui-fanvue"
-version = "0.2.1"
+version = "0.2.2"
 description = "Publish your ComfyUI outputs to your Fanvue account: upload images and videos to your vault and schedule posts. Needs a free LatentPost account."
 authors = [{ name = "LatentPost", email = "support@latentpost.com" }]
 license = { file = "LICENSE" }
