@@ -13,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.2.2"
+VERSION = "0.2.3"
 DEFAULT_URL = "https://latentpost.com"
 SUPPORT_EMAIL = "support@latentpost.com"
 SETTING_ID = "LatentPost.APIKey"  # registered by web/latentpost.js
